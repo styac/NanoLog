@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 */
 
 #include "NanoLog.hpp"
+
 #include <cstring>
 #include <chrono>
 #include <ctime>
@@ -45,17 +46,15 @@ uint64_t timestamp_now()
 /* I want [2016-10-13 00:01:23.528514] */
 void format_timestamp(std::ostream & os, uint64_t timestamp)
 {
-    // The next 3 lines do not work on MSVC!
-    // auto duration = std::chrono::microseconds(timestamp);
-    // std::chrono::high_resolution_clock::time_point time_point(duration);
-    // std::time_t time_t = std::chrono::high_resolution_clock::to_time_t(time_point);
-    std::time_t time_t = timestamp / 1000000;
-    auto gmtime = std::gmtime(&time_t);
     char buffer[32];
-    strftime(buffer, 32, "%Y-%m-%d %T.", gmtime);
-    char microseconds[7];
-    sprintf(microseconds, "%06llu", timestamp % 1000000);
-    os << '[' << buffer << microseconds << ']';
+    const std::time_t time_t = timestamp / 1000000;
+    const uint32_t microsec = timestamp % 1000000;
+    auto gmtime = std::gmtime(&time_t);
+    // 012345678901234567890123456789
+    // [2018-12-30 14:38:27.uuuuuu]
+    std::strftime(buffer, 22, "[%F %T.", gmtime);
+    sprintf(&buffer[21], "%06u]", microsec);
+    os << buffer;
 }
 
 std::thread::id this_thread_id()
@@ -80,7 +79,6 @@ struct TupleIndex < T, std::tuple < U, Types... > >
 };
 
 } // anonymous namespace
-
 namespace nanolog
 {
 typedef std::tuple < char, uint32_t, uint64_t, int32_t, int64_t, double, NanoLogLine::string_literal_t, char * > SupportedTypes;
@@ -90,19 +88,18 @@ char const * to_string(LogLevel loglevel)
     switch (loglevel)
     {
     case LogLevel::DEBUG:
-        return "DEBUG";
+        return "-DBG-";
     case LogLevel::TRACE:
-        return "TRACE";
+        return "-TRC-";
     case LogLevel::INFO:
-        return "INFO";
+        return "-INF-";
     case LogLevel::WARN:
-        return "WARN";
+        return "-WRN-";
     case LogLevel::CRIT:
-        return "CRIT";
-    case LogLevel::NONE:
-        return "NONE";
+        return "-CRT-";
+    default:
+        return "-XXX-";
     }
-    return "XXXX";
 }
 
 template < typename Arg >
@@ -147,13 +144,13 @@ void NanoLogLine::stringify(std::ostream & os)
 
     format_timestamp(os, timestamp);
 
-    os << '[' << to_string(loglevel) << ']'
-       << '[' << threadid << ']'
-       << '[' << file.m_s << ':' << function.m_s << ':' << line << "] ";
+    os << to_string(loglevel)
+       << std::hex << threadid
+       << " [" << file.m_s << ':' << function.m_s << ':' << std::dec << line << "] ";
 
     stringify(os, b, end);
 
-    os << std::endl;
+    os << "\n"; // std::endl flushes
 
     if (loglevel >= LogLevel::CRIT)
         os.flush();

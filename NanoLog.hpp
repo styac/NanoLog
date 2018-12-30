@@ -1,5 +1,6 @@
+#ifndef NANO_LOG_HEADER_GUARD
+#define NANO_LOG_HEADER_GUARD
 /*
-
 Distributed under the MIT License (MIT)
 
     Copyright (c) 2016 Karthik Iyengar
@@ -21,11 +22,8 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTH
 OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 */
 
-#ifndef NANO_LOG_HEADER_GUARD
-#define NANO_LOG_HEADER_GUARD
 
 #include <cstdint>
 #include <memory>
@@ -35,8 +33,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 namespace nanolog
 {
+enum class LogLevel : uint8_t
+{
+    DEBUG,
+    TRACE,
+    INFO,
+    WARN,
+    CRIT,
 // NONE is the highest -- disable logging
-enum class LogLevel : uint8_t { DEBUG, TRACE, INFO, WARN, CRIT, NONE };
+    NONE
+};
+
+void set_log_level(LogLevel level);
+
+bool is_logged(LogLevel level);
 
 class NanoLogLine
 {
@@ -82,7 +92,8 @@ public:
 
     struct string_literal_t
     {
-        explicit string_literal_t(char const * s) : m_s(s) {}
+        explicit string_literal_t(char const * s)
+        : m_s(s) {}
         char const * m_s;
     };
 
@@ -110,16 +121,9 @@ private:
 
 struct NanoLog
 {
-    /*
-     * Ideally this should have been operator+=
-     * Could not get that to compile, so here we are...
-     */
     bool operator==(NanoLogLine &);
 };
 
-void set_log_level(LogLevel level);
-
-bool is_logged(LogLevel level);
 
 /*
  * Non guaranteed logging. Uses a ring buffer to hold log lines.
@@ -160,7 +164,6 @@ void initialize(NonGuaranteedLogger ngl, std::string const & log_directory, std:
 #define NANO_LOG(LEVEL) nanolog::NanoLog() == nanolog::NanoLogLine(LEVEL, __FILE__, __func__, __LINE__)
 #define LOG_DEBUG nanolog::is_logged(nanolog::LogLevel::DEBUG) && NANO_LOG(nanolog::LogLevel::DEBUG)
 #define LOG_TRACE nanolog::is_logged(nanolog::LogLevel::TRACE) && NANO_LOG(nanolog::LogLevel::TRACE)
-#define LOG_INFO nanolog::is_logged(nanolog::LogLevel::INFO) && NANO_LOG(nanolog::LogLevel::INFO)
 #define LOG_INFO nanolog::is_logged(nanolog::LogLevel::INFO) && NANO_LOG(nanolog::LogLevel::INFO)
 #define LOG_WARN nanolog::is_logged(nanolog::LogLevel::WARN) && NANO_LOG(nanolog::LogLevel::WARN)
 #define LOG_CRIT nanolog::is_logged(nanolog::LogLevel::CRIT) && NANO_LOG(nanolog::LogLevel::CRIT)
