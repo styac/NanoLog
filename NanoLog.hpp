@@ -24,7 +24,6 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -44,15 +43,17 @@ enum class LogLevel : uint8_t
     NONE
 };
 
+constexpr size_t LINEBUFFER_SIZE = 256;
+
 void set_log_level(LogLevel level);
 
 bool is_logged(LogLevel level);
 
-class NanoLogLine
+class NanoLogLine final
 {
 public:
     NanoLogLine(LogLevel level, char const * file, char const * function, uint32_t line);
-    ~NanoLogLine();
+    ~NanoLogLine()  = default;
 
     NanoLogLine(NanoLogLine &&) = default;
     NanoLogLine& operator=(NanoLogLine &&) = default;
@@ -64,6 +65,7 @@ public:
     NanoLogLine& operator<<(uint32_t arg);
     NanoLogLine& operator<<(int64_t arg);
     NanoLogLine& operator<<(uint64_t arg);
+    NanoLogLine& operator<<(float arg);
     NanoLogLine& operator<<(double arg);
     NanoLogLine& operator<<(std::string const & arg);
 
@@ -113,17 +115,32 @@ private:
     void resize_buffer_if_needed(size_t additional_bytes);
     void stringify(std::ostream & os, char * start, char const * const end);
 
-    size_t m_bytes_used;
-    size_t m_buffer_size;
+    uint32_t m_bytes_used;
+    uint32_t m_buffer_size;
     std::unique_ptr < char [] > m_heap_buffer;
-    char m_stack_buffer[256 - 2 * sizeof(size_t) - sizeof(decltype(m_heap_buffer)) - 8 /* Reserved */];
+    uint64_t m_timestamp;
+    string_literal_t m_file;
+    string_literal_t m_function;
+    uint32_t m_line;
+    LogLevel m_loglevel;
+
+    char m_stack_buffer[ LINEBUFFER_SIZE
+        - sizeof(m_bytes_used)
+        - sizeof(m_buffer_size)
+        - sizeof(decltype(m_heap_buffer))
+        - sizeof(m_timestamp)
+        - sizeof(m_file)
+        - sizeof(m_function)
+        - sizeof(m_line)
+        - sizeof(m_loglevel)
+        - 8 /* Reserved */
+    ];
 };
 
-struct NanoLog
+struct NanoLog final
 {
     bool operator==(NanoLogLine &);
 };
-
 
 /*
  * Non guaranteed logging. Uses a ring buffer to hold log lines.
@@ -133,7 +150,7 @@ struct NanoLog
  * is determined by this parameter. Since each LogLine is 256 bytes,
  * ring_buffer_size = ring_buffer_size_mb * 1024 * 1024 / 256
  */
-struct NonGuaranteedLogger
+struct NonGuaranteedLogger final
 {
     NonGuaranteedLogger(uint32_t ring_buffer_size_mb_) : ring_buffer_size_mb(ring_buffer_size_mb_) {}
     uint32_t ring_buffer_size_mb;
@@ -142,7 +159,7 @@ struct NonGuaranteedLogger
 /*
  * Provides a guarantee log lines will not be dropped.
  */
-struct GuaranteedLogger
+struct GuaranteedLogger final
 {
 };
 
