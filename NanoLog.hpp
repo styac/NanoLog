@@ -29,6 +29,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <string>
 #include <iosfwd>
 #include <type_traits>
+#include <thread>
 
 namespace nanolog
 {
@@ -43,9 +44,22 @@ enum class LogLevel : uint8_t
     NONE
 };
 
+enum LogFormat : uint8_t
+{
+    LF_NONE        = 0,
+    LF_DATE_TIME   = 0x01,
+    LF_THREAD      = 0x02,
+    LF_FILE_FUNC   = 0x04,
+    LF_ALL         = 0xFF
+};
+
+const char * const this_thread_id_str();
+
 constexpr size_t LINEBUFFER_SIZE = 256;
 
 void set_log_level(LogLevel level);
+
+void set_log_format(LogFormat format);
 
 bool is_logged(LogLevel level);
 
@@ -53,6 +67,7 @@ class NanoLogLine final
 {
 public:
     NanoLogLine(LogLevel level, char const * file, char const * function, uint32_t line);
+    NanoLogLine(); // for init
     ~NanoLogLine()  = default;
 
     NanoLogLine(NanoLogLine &&) = default;
@@ -115,14 +130,15 @@ private:
     void resize_buffer_if_needed(size_t additional_bytes);
     void stringify(std::ostream & os, char * start, char const * const end);
 
-    uint32_t m_bytes_used;
-    uint32_t m_buffer_size;
+    uint32_t            m_bytes_used;
+    uint32_t            m_buffer_size;
     std::unique_ptr < char [] > m_heap_buffer;
-    uint64_t m_timestamp;
-    string_literal_t m_file;
-    string_literal_t m_function;
-    uint32_t m_line;
-    LogLevel m_loglevel;
+    uint64_t            m_timestamp;
+    string_literal_t    m_file;
+    string_literal_t    m_function;    
+    string_literal_t    m_thread_id;
+    uint32_t            m_line;
+    LogLevel            m_loglevel;
 
     char m_stack_buffer[ LINEBUFFER_SIZE
         - sizeof(m_bytes_used)
@@ -131,6 +147,7 @@ private:
         - sizeof(m_timestamp)
         - sizeof(m_file)
         - sizeof(m_function)
+        - sizeof(m_thread_id)    
         - sizeof(m_line)
         - sizeof(m_loglevel)
         - 8 /* Reserved */
@@ -152,7 +169,9 @@ struct NanoLog final
  */
 struct NonGuaranteedLogger final
 {
-    NonGuaranteedLogger(uint32_t ring_buffer_size_mb_) : ring_buffer_size_mb(ring_buffer_size_mb_) {}
+    NonGuaranteedLogger(uint32_t ring_buffer_size_mb_) 
+    : ring_buffer_size_mb(ring_buffer_size_mb_) 
+    {}
     uint32_t ring_buffer_size_mb;
 };
 
