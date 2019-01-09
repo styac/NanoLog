@@ -185,18 +185,18 @@ void NanoLogLine::stringify(std::ostream & os)
 
     if( format & uint8_t(LogFormat::LF_THREAD) ) 
     {
-        os << m_thread_id;
+        os << std::hex << m_thread_id << " ";
     }
+
+    os << std::dec;
     
     if( format & uint8_t(LogFormat::LF_FILE_FUNC) ) 
     {
         os << "[" << m_file.m_s
         << ':' << m_function.m_s
-        << ':' << std::dec
-        << m_line << "] " ;
+        << ':' << m_line << "] " ;
     }
     
-    os << std::dec;
 
     stringify(os, b, end);
 
