@@ -53,8 +53,6 @@ enum LogFormat : uint8_t
     LF_ALL         = 0xFF
 };
 
-const char * const this_thread_id_str();
-
 constexpr size_t LINEBUFFER_SIZE = 256;
 
 void set_log_level(LogLevel level);
@@ -76,6 +74,8 @@ public:
     void stringify(std::ostream & os);
 
     NanoLogLine& operator<<(char arg);
+    NanoLogLine& operator<<(int16_t arg);
+    NanoLogLine& operator<<(uint16_t arg);
     NanoLogLine& operator<<(int32_t arg);
     NanoLogLine& operator<<(uint32_t arg);
     NanoLogLine& operator<<(int64_t arg);
@@ -136,7 +136,7 @@ private:
     uint64_t            m_timestamp;
     string_literal_t    m_file;
     string_literal_t    m_function;    
-    string_literal_t    m_thread_id;
+    std::thread::id     m_thread_id;
     uint32_t            m_line;
     LogLevel            m_loglevel;
 

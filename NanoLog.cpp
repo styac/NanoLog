@@ -43,6 +43,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 namespace
 {
 
+inline std::thread::id this_thread_id()
+{    
+    static thread_local const std::thread::id id = std::this_thread::get_id();
+    return id;
+}
+
 /* Returns microseconds since epoch */
 inline uint64_t timestamp_now()
 {
@@ -77,13 +83,6 @@ inline void format_timestamp(std::ostream & os, uint64_t timestamp)
 std::atomic < unsigned int > m_loglevel = {0};
 std::atomic < unsigned int > m_logformat  = {0};
 
-
-inline std::thread::id this_thread_id()
-{    
-    static thread_local const std::thread::id id = std::this_thread::get_id();
-    return id;
-}
-
 template < typename T, typename Tuple >
 struct TupleIndex;
 
@@ -104,29 +103,18 @@ struct TupleIndex < T, std::tuple < U, Types... > >
 namespace nanolog
 {
 
-const char * const this_thread_id_str()
-{
-    constexpr size_t res_size = 32;
-    auto stringify_id = [] () 
-    { 
-        std::stringstream ss;
-        ss << std::hex << std::this_thread::get_id();        
-        std::array<char,res_size> res;
-        auto ln = std::min(ss.str().size(),res_size-2);
-        for( auto i=0u; i<ln; ++i ) 
-        {
-            res[i] = ss.str()[i];
-        }
-        res[ln] = ' ';
-        res[ln+1] = 0;
-        return res; 
-    };
-
-    static thread_local const std::array<char,res_size> id = stringify_id();
-    return id.data();
-}
-    
-typedef std::tuple < char, uint32_t, uint64_t, int32_t, int64_t, float, double, NanoLogLine::string_literal_t, char * > SupportedTypes;
+typedef std::tuple < 
+    char, 
+    uint16_t, 
+    uint32_t, 
+    uint64_t, 
+    int16_t, 
+    int32_t, 
+    int64_t, 
+    float, 
+    double, 
+    NanoLogLine::string_literal_t, 
+    char * > SupportedTypes;
 
 inline char const * to_string(LogLevel loglevel)
 {
@@ -164,10 +152,11 @@ NanoLogLine::NanoLogLine(LogLevel level, char const * file, char const * functio
 , m_timestamp(timestamp_now())
 , m_file(file)
 , m_function(function) 
-, m_thread_id(this_thread_id_str())
+, m_thread_id(this_thread_id())
 , m_line(line)
 , m_loglevel(level)
-{}
+{
+}
 
 NanoLogLine::NanoLogLine()
 : m_bytes_used(0)
@@ -176,7 +165,7 @@ NanoLogLine::NanoLogLine()
 , m_timestamp()
 , m_file("")
 , m_function("") 
-, m_thread_id("")
+, m_thread_id()
 , m_line()
 , m_loglevel(LogLevel::NONE)
 {}
@@ -196,12 +185,12 @@ void NanoLogLine::stringify(std::ostream & os)
 
     if( format & uint8_t(LogFormat::LF_THREAD) ) 
     {
-        os << m_thread_id.m_s;
+        os << m_thread_id;
     }
     
     if( format & uint8_t(LogFormat::LF_FILE_FUNC) ) 
     {
-        os << " [" << m_file.m_s
+        os << "[" << m_file.m_s
         << ':' << m_function.m_s
         << ':' << std::dec
         << m_line << "] " ;
@@ -277,7 +266,18 @@ void NanoLogLine::stringify(std::ostream & os, char * start, char const * const 
     case 7:
         stringify(os, decode(os, start, static_cast<std::tuple_element<7, SupportedTypes>::type*>(nullptr)), end);
         return;
+    case 8:
+        stringify(os, decode(os, start, static_cast<std::tuple_element<8, SupportedTypes>::type*>(nullptr)), end);
+        return;
+    case 9:
+        stringify(os, decode(os, start, static_cast<std::tuple_element<9, SupportedTypes>::type*>(nullptr)), end);
+        return;
+    case 10:
+        stringify(os, decode(os, start, static_cast<std::tuple_element<10, SupportedTypes>::type*>(nullptr)), end);
+        return;
     }
+
+    static_assert( 10 == ( std::tuple_size<SupportedTypes>::value - 1 ), "FATAL: not implemented type" );
 }
 
 inline char * NanoLogLine::buffer()
@@ -311,13 +311,13 @@ void NanoLogLine::resize_buffer_if_needed(size_t additional_bytes)
 void NanoLogLine::encode(char const * arg)
 {
     if (arg != nullptr)
-        encode_c_string(arg, strlen(arg));
+        encode_c_string(arg, std::strlen(arg));
 }
 
 void NanoLogLine::encode(char * arg)
 {
     if (arg != nullptr)
-        encode_c_string(arg, strlen(arg));
+        encode_c_string(arg, std::strlen(arg));
 }
 
 void NanoLogLine::encode_c_string(char const * arg, size_t length)
@@ -341,6 +341,18 @@ void NanoLogLine::encode(string_literal_t arg)
 NanoLogLine& NanoLogLine::operator<<(std::string const & arg)
 {
     encode_c_string(arg.c_str(), arg.length());
+    return *this;
+}
+
+NanoLogLine& NanoLogLine::operator<<(int16_t arg)
+{
+    encode < int16_t >(arg, TupleIndex < int16_t, SupportedTypes >::value);
+    return *this;
+}
+
+NanoLogLine& NanoLogLine::operator<<(uint16_t arg)
+{
+    encode < uint16_t >(arg, TupleIndex < uint16_t, SupportedTypes >::value);
     return *this;
 }
 
@@ -374,6 +386,12 @@ NanoLogLine& NanoLogLine::operator<<(double arg)
     return *this;
 }
 
+NanoLogLine& NanoLogLine::operator<<(float arg)
+{
+    encode < float >(arg, TupleIndex < float, SupportedTypes >::value);
+    return *this;
+}
+
 NanoLogLine& NanoLogLine::operator<<(char arg)
 {
     encode < char >(arg, TupleIndex < char, SupportedTypes >::value);
@@ -391,7 +409,8 @@ struct SpinLock final
 {
     SpinLock(std::atomic_flag & flag) : m_flag(flag)
     {
-        while (m_flag.test_and_set(std::memory_order_acquire));
+        while (m_flag.test_and_set(std::memory_order_acquire))
+            ;
     }
 
     ~SpinLock()
@@ -472,7 +491,7 @@ private:
     size_t const m_size;
     Item * m_ring;
     std::atomic < unsigned int > m_write_index;
-    char pad[64];
+    char pad[ 64 - sizeof(m_size) - sizeof(m_ring) - sizeof(m_write_index) ];
     unsigned int m_read_index;
 };
 
@@ -764,6 +783,7 @@ void initialize(NonGuaranteedLogger ngl, std::string const & log_directory, std:
     nanologger.reset(new NanoLogger(ngl, log_directory, log_file_name, log_file_roll_size_mb));
     atomic_nanologger.store(nanologger.get(), std::memory_order_seq_cst);
     m_logformat.store( uint8_t(LogFormat::LF_ALL));
+//    init_thread_id();
 }
 
 void initialize(GuaranteedLogger gl, std::string const & log_directory, std::string const & log_file_name, uint32_t log_file_roll_size_mb)
@@ -771,6 +791,7 @@ void initialize(GuaranteedLogger gl, std::string const & log_directory, std::str
     nanologger.reset(new NanoLogger(gl, log_directory, log_file_name, log_file_roll_size_mb));
     atomic_nanologger.store(nanologger.get(), std::memory_order_seq_cst);
     m_logformat.store( uint8_t(LogFormat::LF_ALL));
+//    init_thread_id();
 }
 
 void set_log_level(LogLevel level)
