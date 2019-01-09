@@ -14,9 +14,10 @@
 * Nanolog supports Guaranteed logging i.e. log messages are never dropped even at extreme logging rates.
 * Nanolog also supports Non Guaranteed logging. Uses a ring buffer to hold log lines. In case of extreme logging rate when the ring gets full (i.e. the consumer thread cannot pop items fast enough), the previous log line in the slot will be dropped. Does not block producer even if the ring buffer is full.
 
-# changes (I.S.)
-* added levels: DEBUg TRACE NONE (NONE means disable)
+# Changes (I.S.)
+* added levels: DEBUG TRACE NONE (NONE means disable)
 * if filename is empty ("") then use the std::cout
+* format options to enable/disable log prefixes: LF_NONE, LF_DATE_TIME, LF_THREAD, LF_FILE_FUNC, LF_ALL
 
 # Usage
 ```c++
