@@ -82,8 +82,10 @@ public:
     NanoLogLine& operator<<(uint64_t arg);
     NanoLogLine& operator<<(float arg);
     NanoLogLine& operator<<(double arg);
-    NanoLogLine& operator<<(std::string const & arg);
     NanoLogLine& operator<<(void * arg);
+    
+    // MUST NOT CONTAIN \0
+    NanoLogLine& operator<<(std::string const & arg);
 
     template < size_t N >
     NanoLogLine& operator<<(const char (&arg)[N])
@@ -129,7 +131,7 @@ private:
     void encode(string_literal_t arg);
     void encode_c_string(char const * arg, size_t length);
     void resize_buffer_if_needed(size_t additional_bytes);
-    void stringify(std::ostream & os, char * start, char const * const end);
+    void stringify(std::ostream & os, char * start, char const * const end) const;
 
     uint32_t            m_bytes_used;
     uint32_t            m_buffer_size;

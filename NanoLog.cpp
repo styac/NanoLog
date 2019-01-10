@@ -173,7 +173,7 @@ NanoLogLine::NanoLogLine()
 , m_loglevel(LogLevel::NONE)
 {}
 
-void NanoLogLine::stringify(std::ostream & os)
+void NanoLogLine::stringify(std::ostream & os) 
 {
     char * b = !m_heap_buffer ? m_stack_buffer : m_heap_buffer.get();
     char const * const end = b + m_bytes_used;
@@ -240,7 +240,7 @@ char * decode(std::ostream & os, char * b, void ** dummy)
     return b + sizeof(uint64_t);
 }
 
-void NanoLogLine::stringify(std::ostream & os, char * start, char const * const end)
+void NanoLogLine::stringify(std::ostream & os, char * start, char const * const end) const
 {
     if (start == end)
         return;
@@ -348,6 +348,7 @@ void NanoLogLine::encode(string_literal_t arg)
     encode < string_literal_t >(arg, TupleIndex < string_literal_t, SupportedTypes >::value);
 }
 
+// MUST NOT CONTAIN \0
 NanoLogLine& NanoLogLine::operator<<(std::string const & arg)
 {
     encode_c_string(arg.c_str(), arg.length());
@@ -423,7 +424,8 @@ struct BufferBase
 
 struct SpinLock final
 {
-    SpinLock(std::atomic_flag & flag) : m_flag(flag)
+    SpinLock(std::atomic_flag & flag) 
+    : m_flag(flag)
     {
         while (m_flag.test_and_set(std::memory_order_acquire))
             ;
@@ -657,8 +659,10 @@ class FileWriter final
 {
 public:
     FileWriter(std::string const & log_directory, std::string const & log_file_name, uint32_t log_file_roll_size_mb)
-    : m_log_file_roll_size_bytes(log_file_roll_size_mb * 1024 * 1024)
-    , m_name(log_directory + log_file_name)
+    : m_bytes_written(0)
+    , m_log_file_roll_size_bytes(log_file_roll_size_mb * 1024 * 1024)
+    , m_name(log_directory + log_file_name + "_")
+    , m_os()
     , m_useFile(true)
     {
         if( log_file_name.size() == 0 )
@@ -671,13 +675,19 @@ public:
         }
     }
 
+    ~FileWriter()
+    {
+        m_os.flush();
+        m_os.close();        
+    }
+    
     void write(NanoLogLine & logline)
     {
         if( m_useFile )
         {
-            auto pos = m_os->tellp();
-            logline.stringify(*m_os);
-            m_bytes_written += m_os->tellp() - pos;
+            auto pos = m_os.tellp();
+            logline.stringify(m_os);
+            m_bytes_written += m_os.tellp() - pos;
             if (m_bytes_written > m_log_file_roll_size_bytes)
             {
                 roll_file();
@@ -692,28 +702,27 @@ public:
 private:
     void roll_file()
     {
-        if (m_os)
-        {
-            m_os->flush();
-            m_os->close();
-        }
+        char buffer[40];
+        timespec filetime;
 
+        m_os.flush();
+        m_os.close();
         m_bytes_written = 0;
-        m_os.reset(new std::ofstream());
-        // TODO Optimize this part. Does it even matter ?
-        std::string log_file_name = m_name;
-        log_file_name.append(".");
-        log_file_name.append(std::to_string(++m_file_number));
-        log_file_name.append(".txt");
-        m_os->open(log_file_name, std::ofstream::out | std::ofstream::trunc);
+
+        clock_gettime( CLOCK_REALTIME, &filetime );        
+        const std::time_t time_t = filetime.tv_sec;
+        const uint32_t frac_time = filetime.tv_nsec;
+        const auto gmtime = std::gmtime(&time_t);
+        std::strftime( buffer, 20, "%F_%T", gmtime );
+        sprintf( &buffer[19], "_%09u.log", frac_time );
+        m_os.open( m_name + buffer, std::ofstream::out | std::ofstream::trunc );
     }
 
-    uint32_t m_file_number = 0;
-    std::streamoff m_bytes_written = 0;
-    uint32_t const m_log_file_roll_size_bytes;
-    std::string const m_name;
-    std::unique_ptr < std::ofstream > m_os;
-    uint8_t m_useFile   : 1;
+    std::streamoff      m_bytes_written;
+    uint32_t const      m_log_file_roll_size_bytes;
+    std::string const   m_name;
+    std::ofstream       m_os;
+    uint8_t             m_useFile : 1;
 };
 
 class NanoLogger final
