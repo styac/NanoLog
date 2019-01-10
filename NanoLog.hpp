@@ -83,6 +83,7 @@ public:
     NanoLogLine& operator<<(float arg);
     NanoLogLine& operator<<(double arg);
     NanoLogLine& operator<<(std::string const & arg);
+    NanoLogLine& operator<<(void * arg);
 
     template < size_t N >
     NanoLogLine& operator<<(const char (&arg)[N])

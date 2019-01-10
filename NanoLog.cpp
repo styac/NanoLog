@@ -33,6 +33,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <c++/7/atomic>
 #include <c++/7/array>
 
@@ -114,7 +115,9 @@ typedef std::tuple <
     float, 
     double, 
     NanoLogLine::string_literal_t, 
-    char * > SupportedTypes;
+    char *,
+    void * 
+    > SupportedTypes;
 
 inline char const * to_string(LogLevel loglevel)
 {
@@ -176,32 +179,26 @@ void NanoLogLine::stringify(std::ostream & os)
     char const * const end = b + m_bytes_used;
     auto format = m_logformat.load(std::memory_order_acquire);
     
+    os << std::dec;    
     if( format & uint8_t(LogFormat::LF_DATE_TIME) ) 
     {
         format_timestamp(os, m_timestamp);
-    }
-    
+    }    
     os  << to_string(m_loglevel);
-
     if( format & uint8_t(LogFormat::LF_THREAD) ) 
     {
-        os << std::hex << m_thread_id << " ";
+        auto flags = os.flags();
+        os << std::hex << std::uppercase << m_thread_id << " ";
+        os.flags(flags);
     }
-
-    os << std::dec;
-    
     if( format & uint8_t(LogFormat::LF_FILE_FUNC) ) 
     {
         os << "[" << m_file.m_s
         << ':' << m_function.m_s
         << ':' << m_line << "] " ;
-    }
-    
-
+    }    
     stringify(os, b, end);
-
     os << "\n";
-
     if (m_loglevel >= LogLevel::CRIT)
         os.flush();
 }
@@ -231,6 +228,16 @@ char * decode(std::ostream & os, char * b, char ** dummy)
         ++b;
     }
     return ++b;
+}
+
+template <>
+char * decode(std::ostream & os, char * b, void ** dummy)
+{
+    uint64_t arg = *reinterpret_cast < uint64_t * >(b);
+    auto flags = os.flags();
+    os << "0x" << std::setw(16) << std::setfill('0') << std::hex << std::uppercase << arg;
+    os.flags(flags);
+    return b + sizeof(uint64_t);
 }
 
 void NanoLogLine::stringify(std::ostream & os, char * start, char const * const end)
@@ -275,9 +282,12 @@ void NanoLogLine::stringify(std::ostream & os, char * start, char const * const 
     case 10:
         stringify(os, decode(os, start, static_cast<std::tuple_element<10, SupportedTypes>::type*>(nullptr)), end);
         return;
+    case 11:
+        stringify(os, decode(os, start, static_cast<std::tuple_element<11, SupportedTypes>::type*>(nullptr)), end);
+        return;
     }
 
-    static_assert( 10 == ( std::tuple_size<SupportedTypes>::value - 1 ), "FATAL: not implemented type" );
+    static_assert( 11 == ( std::tuple_size<SupportedTypes>::value - 1 ), "FATAL: not implemented type" );
 }
 
 inline char * NanoLogLine::buffer()
@@ -395,6 +405,12 @@ NanoLogLine& NanoLogLine::operator<<(float arg)
 NanoLogLine& NanoLogLine::operator<<(char arg)
 {
     encode < char >(arg, TupleIndex < char, SupportedTypes >::value);
+    return *this;
+}
+
+NanoLogLine& NanoLogLine::operator<<(void * arg)
+{
+    encode < void * >(arg, TupleIndex < void *, SupportedTypes >::value);
     return *this;
 }
 
@@ -783,7 +799,6 @@ void initialize(NonGuaranteedLogger ngl, std::string const & log_directory, std:
     nanologger.reset(new NanoLogger(ngl, log_directory, log_file_name, log_file_roll_size_mb));
     atomic_nanologger.store(nanologger.get(), std::memory_order_seq_cst);
     m_logformat.store( uint8_t(LogFormat::LF_ALL));
-//    init_thread_id();
 }
 
 void initialize(GuaranteedLogger gl, std::string const & log_directory, std::string const & log_file_name, uint32_t log_file_roll_size_mb)
@@ -791,7 +806,6 @@ void initialize(GuaranteedLogger gl, std::string const & log_directory, std::str
     nanologger.reset(new NanoLogger(gl, log_directory, log_file_name, log_file_roll_size_mb));
     atomic_nanologger.store(nanologger.get(), std::memory_order_seq_cst);
     m_logformat.store( uint8_t(LogFormat::LF_ALL));
-//    init_thread_id();
 }
 
 void set_log_level(LogLevel level)

@@ -21,7 +21,7 @@ void nanolog_benchmark()
 {
     std::stringstream ss;
     std::cout << ss.str() << std::endl;
-    constexpr int32_t iterExp = 20;
+    constexpr int32_t iterExp = 4;
     int const iterations = 1<<iterExp;
     char const * const benchmark = " test ";
     uint64_t begin = timestamp_now();
@@ -34,6 +34,8 @@ void nanolog_benchmark()
     int64_t     i64 = -264;
     float       f = 7000.0;
     double      d = 8000.0;
+    void  *     vp = &u16;
+    void  *     vp0 = nullptr;
     char        c = 'X';
     
     for (int i = 0; i < iterations; ++i) {
@@ -47,6 +49,8 @@ void nanolog_benchmark()
             << " i16 " << i16 
             << " i32 " << i32
             << " i64 " << i64 
+            << " voidp " << vp
+            << " nullp " << vp0
             << " d " << d
             ;
     }
@@ -75,8 +79,8 @@ void run_benchmark(Function && f, int thread_count)
 
 int main()
 {
-    nanolog::initialize(nanolog::NonGuaranteedLogger(10), "/tmp/", "nanolog_test", 1);
-    for (auto threads : { 1, 2, 3, 4, 5 })
+    nanolog::initialize(nanolog::NonGuaranteedLogger(10), "/tmp/", "", 1);
+    for (auto threads : { 1, 2, 3 })
     	run_benchmark(nanolog_benchmark, threads);
 
     return 0;
