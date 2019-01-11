@@ -40,6 +40,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 // #define USE_NANOSEC
 
 // TODO: dec, hex, nano/microsec time
+// QString ? need UTF16-> UTF8
+// sse?
+
 
 namespace
 {
@@ -702,16 +705,14 @@ public:
 private:
     void roll_file()
     {
+        constexpr uint32_t time2sec = 1000*1000*1000;
         char buffer[40];
-        timespec filetime;
-
         m_os.flush();
         m_os.close();
         m_bytes_written = 0;
-
-        clock_gettime( CLOCK_REALTIME, &filetime );        
-        const std::time_t time_t = filetime.tv_sec;
-        const uint32_t frac_time = filetime.tv_nsec;
+        auto filetime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();     
+        const std::time_t time_t = filetime / time2sec;
+        const uint32_t frac_time = filetime % time2sec;
         const auto gmtime = std::gmtime(&time_t);
         std::strftime( buffer, 20, "%F_%T", gmtime );
         sprintf( &buffer[19], "_%09u.log", frac_time );
